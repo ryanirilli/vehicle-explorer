@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import {
   Box,
   Flex,
@@ -10,7 +10,6 @@ import {
   useBreakpointValue,
 } from "@chakra-ui/react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Suspense, useRef } from "react";
 import * as THREE from "three";
 import { useControls } from "leva";
 import { OrbitControls, useFBX, useCubeTexture } from "@react-three/drei";
@@ -20,66 +19,17 @@ import {
   AiFillInstagram,
 } from "react-icons/ai";
 
-const body = new Set([
-  "09_shell1",
-  "Front_Quarter_Panel_shell1",
-  "Headlight_Lenses_Dark2",
-  "Headlight_Lenses_Dark1",
-  "Streetview_Outer_Reflection_shell1",
-  "Front_Facia_shell1",
-  "shell_node_8924028",
-  "Front_Door_shell1",
-  "Rear_Door_shell2",
-  "Rear_Quarter_Panel_shell1",
-  "Tailgate_Body_shell1",
-  "License_Plate_Trim_shell1",
-  "Rear_Quarter_Panel_shell2",
-  "Rear_Door_shell1",
-  "Front_Door_shell2",
-  "Charge_Door_shell1",
-  "54_shell1",
-  "53_shell1",
-]);
-
-const headlights = new Set([
-  "Headlight_Lenses_Clear2",
-  "Headlight_Lenses_Clear1",
-  "polySurface4687",
-  "polySurface4684",
-]);
-
-const bodyMaterial = new THREE.MeshPhongMaterial({
-  color: "#91D0CC",
-  reflectivity: 0.4,
-  dithering: true,
-  shininess: 0.4,
-});
-
-const headlightMaterial = new THREE.MeshPhongMaterial({
-  color: "#a3b3bd",
-  dithering: true,
-  shininess: 70,
-  emissive: "#3d3d3d",
-});
-
-const rimsMaterial = new THREE.MeshPhongMaterial({
-  color: "#91D0CC",
-  dithering: true,
-});
-
-const tireMaterial = new THREE.MeshPhongMaterial({
-  color: "#424242",
-  dithering: true,
-});
-
 const rotSpeed = 0.001;
 
 function Content(): JSX.Element {
-  const obj = useFBX("/LV_Export_300K.fbx");
+  const obj = useFBX("/GLS-580.fbx");
   const envMap = useCubeTexture(
     ["front.jpg", "back.jpg", "up.jpg", "down.jpg", "left.jpg", "right.jpg"],
     { path: "/environment/garage/" }
   );
+
+  const bodyMatRef = useRef<THREE.MeshPhongMaterial>();
+  const rimMatRef = useRef<THREE.MeshPhongMaterial>();
 
   const light = useRef();
   const light2 = useRef();
@@ -88,8 +38,8 @@ function Content(): JSX.Element {
   const vehicleRef = useRef<THREE.Mesh>();
 
   const colors = useControls({
-    body: { r: 36, b: 39, g: 37 },
-    rims: { r: 16, b: 16, g: 16 },
+    body: { r: 10, b: 13, g: 8 },
+    highlight: { r: 29, b: 77, g: 255 },
   });
 
   const { rotate } = useControls({ rotate: true });
@@ -97,6 +47,7 @@ function Content(): JSX.Element {
   useFrame(({ camera }) => {
     if (rotate) {
       const { x, z } = camera.position;
+      // console.log(camera.position);
       camera.position.x = x * Math.cos(rotSpeed) - z * Math.sin(rotSpeed);
       camera.position.z = z * Math.cos(rotSpeed) + x * Math.sin(rotSpeed);
     }
@@ -104,59 +55,41 @@ function Content(): JSX.Element {
 
   useEffect(() => {
     if (obj) {
-      let tint: THREE.Material | null = null;
-      let winshield: THREE.Mesh | null = null;
-
       obj.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-          // console.log(child.name);
-          child.material.opacity = 1;
-          if (body.has(child.name)) {
-            child.material = bodyMaterial;
-            child.material.envMap = envMap;
-          }
-          if (headlights.has(child.name)) {
-            child.material = headlightMaterial;
-          }
+          const bodyMat = child.material.find(
+            (m: any) => m.name === "Polar_White"
+          );
+          bodyMatRef.current = bodyMat;
+          bodyMat.envMap = envMap;
+          bodyMat.reflectivity = 0.4;
+          bodyMat.dithering = true;
+          bodyMat.shininess = 5;
 
-          if (child.name === "body_136") {
-            tint = child.material;
-          }
-          if (child.name === "45_shell1") {
-            winshield = child;
-          }
-          if (tint && winshield) {
-            winshield.material = tint;
-          }
-          if (child.name.includes("pCylinder")) {
-            child.material = tireMaterial;
-          }
-          if (child.name.includes("node#")) {
-            child.material = rimsMaterial;
-          }
+          const windowsMat = child.material.find(
+            (m: any) => m.name === "WindowsTint"
+          );
+          windowsMat.opacity = 1;
 
-          // wheels do not cast shadow
-          if (
-            !child.name.includes("pCylinder") &&
-            !child.name.includes("node#")
-          ) {
-            child.castShadow = true;
-          }
+          const rimsMat = child.material.find(
+            (m: any) => m.name === "Color_M02"
+          );
+          rimMatRef.current = rimsMat;
         }
       });
     }
   }, [obj, envMap]);
 
   useEffect(() => {
-    bodyMaterial.color.setRGB(
+    bodyMatRef.current?.color.setRGB(
       colors.body.r / 255,
       colors.body.g / 255,
       colors.body.b / 255
     );
-    rimsMaterial.color.setRGB(
-      colors.rims.r / 255,
-      colors.rims.g / 255,
-      colors.rims.b / 255
+    rimMatRef.current?.color.setRGB(
+      colors.highlight.r / 255,
+      colors.highlight.g / 255,
+      colors.highlight.b / 255
     );
   }, [colors]);
 
@@ -177,7 +110,7 @@ function Content(): JSX.Element {
         intensity={0.3}
         ref={light}
         castShadow={true}
-        position={[0, 5, -5]}
+        position={[0, 15, -5]}
         angle={0.6}
         penumbra={1}
         shadowBias={-0.0003}
@@ -205,15 +138,15 @@ function Content(): JSX.Element {
 
       <OrbitControls
         enablePan={true}
-        enableZoom={false}
+        enableZoom={true}
         enableRotate={true}
         target={[0, 1.1, 0]}
       />
       <primitive
         ref={vehicleRef}
         object={obj}
-        position={[-5.5, 0, 0]}
-        scale={[0.01, 0.01, 0.01]}
+        position={[-1, 0.1, 2.5]}
+        scale={[0.02, 0.02, 0.02]}
         rotation={[-1.5708, 0, 0]}
         receiveShadow={true}
         castShadow={true}
@@ -284,11 +217,10 @@ function Info() {
       bottom={[16, null, 16]}
       zIndex="docked"
     >
-      <Link href="https://canoo.com">
-        <Heading size="md">
-          <strong>Canoo Lifestyle Vehicle</strong>
-        </Heading>
-      </Link>
+      <Heading size="md">
+        <strong>Mercedes GLS 580</strong>
+      </Heading>
+
       <Heading size="sm" py={2}>
         @ryanirilli
       </Heading>
